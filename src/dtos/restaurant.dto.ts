@@ -150,6 +150,18 @@ export class ListRestaurantsDto extends RestaurantFiltersDto {
   public sort: TRestaurantSortKey = 'relevance';
 }
 
+export class SearchRestaurantsDto extends RestaurantFiltersDto {
+  @IsOptional()
+  @Transform(trimText)
+  @IsString()
+  @MaxLength(200)
+  public q?: string;
+
+  @IsOptional()
+  @IsIn(supportedRestaurantSortKeys)
+  public sort?: TRestaurantSortKey;
+}
+
 export class ParsedRestaurantFiltersDto {
   @IsOptional()
   @IsString()
