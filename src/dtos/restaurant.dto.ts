@@ -149,3 +149,68 @@ export class ListRestaurantsDto extends RestaurantFiltersDto {
   @IsIn(supportedRestaurantSortKeys)
   public sort: TRestaurantSortKey = 'relevance';
 }
+
+export class ParsedRestaurantFiltersDto {
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  public name?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  public city?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  public cuisines?: string[];
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  public dish?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  public dishCuisine?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  public place?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  public minRating?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  public maxCostForTwo?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  public lat?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  public lng?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  public maxDistanceKm?: number;
+
+  @IsOptional()
+  @IsIn(supportedRestaurantSortKeys)
+  public sort?: TRestaurantSortKey;
+}

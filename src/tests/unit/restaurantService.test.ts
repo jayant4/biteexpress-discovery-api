@@ -9,7 +9,10 @@ const defaultFilters: IRestaurantFilters = { sort: 'relevance', page: 1, limit: 
 const createRestaurantService = (restaurants: any[] = []) => {
   const restaurantService = new RestaurantService();
   const findRestaurants = jest.spyOn(restaurantService, 'findRestaurants').mockResolvedValue(restaurants);
-  return { restaurantService, findRestaurants };
+  const getCitiesAndCuisines = jest
+    .spyOn(restaurantService, 'getCitiesAndCuisines')
+    .mockResolvedValue({ cities: ['Gurgaon', 'New Delhi'], cuisines: ['South Indian', 'Chinese'] });
+  return { restaurantService, findRestaurants, getCitiesAndCuisines };
 };
 
 afterEach(() => jest.restoreAllMocks());
@@ -43,6 +46,39 @@ describe('RestaurantService.listRestaurants', () => {
   test('reports the capped limit', async () => {
     const { restaurantService } = createRestaurantService();
     expect((await restaurantService.listRestaurants({ ...defaultFilters, limit: 999 })).limit).toBe(50);
+  });
+});
+
+describe('RestaurantService.searchRestaurants', () => {
+  test('parses q and passes the resulting filters to the same list path', async () => {
+    const { restaurantService, findRestaurants } = createRestaurantService();
+    const searchResult = await restaurantService.searchRestaurants({ q: 'best south indian in gurugram', page: 1, limit: 20 });
+    expect(searchResult.interpreted).toEqual({ city: 'Gurgaon', cuisines: ['South Indian'], sort: '-rating' });
+    expect(findRestaurants).toHaveBeenCalledWith(expect.objectContaining({ city: 'Gurgaon', sort: '-rating', page: 1, limit: 20 }), 1);
+  });
+
+  test('explicit parameters override parsed ones, and undefined ones do not erase them', async () => {
+    const { restaurantService } = createRestaurantService();
+    const searchResult = await restaurantService.searchRestaurants({
+      q: 'chinese in Gurgaon',
+      city: 'New Delhi',
+      cuisines: undefined,
+      page: 1,
+      limit: 20,
+    });
+    expect(searchResult.interpreted).toMatchObject({ city: 'New Delhi', cuisines: ['Chinese'] });
+  });
+
+  test('caches the vocabulary instead of hitting the database on every request', async () => {
+    const { restaurantService, getCitiesAndCuisines } = createRestaurantService();
+    await restaurantService.searchRestaurants({ q: 'chinese', page: 1, limit: 20 });
+    await restaurantService.searchRestaurants({ q: 'chinese', page: 1, limit: 20 });
+    expect(getCitiesAndCuisines).toHaveBeenCalledTimes(1);
+  });
+
+  test('nearest without a location is a 400, raised by the same rule as list', async () => {
+    const { restaurantService } = createRestaurantService();
+    await expect(restaurantService.searchRestaurants({ q: 'nearest dosa', page: 1, limit: 20 })).rejects.toMatchObject({ status: 400 });
   });
 });
 

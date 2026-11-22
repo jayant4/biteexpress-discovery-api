@@ -28,6 +28,12 @@ export interface IRestaurantFilters extends IParsedRestaurantFilters {
   limit: number;
 }
 
+export interface ISearchRestaurantFilters extends IParsedRestaurantFilters {
+  q?: string;
+  page: number;
+  limit: number;
+}
+
 export interface IRestaurantSummary {
   _id: unknown;
   name: string;
@@ -44,4 +50,8 @@ export interface IPaginatedRestaurants {
   page: number;
   limit: number;
   hasMore: boolean;
+}
+
+export interface ISearchedRestaurants extends IPaginatedRestaurants {
+  interpreted: IParsedRestaurantFilters;
 }

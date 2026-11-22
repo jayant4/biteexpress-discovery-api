@@ -1,7 +1,8 @@
 import { createDistanceRanker, IDistanceRanker, StraightLineDistanceRanker } from '@adapters/distanceRanker.adapter';
 import { createGeocoder, IGeocoder, LocalityGeocoder } from '@adapters/geocoder.adapter';
-import { createQueryParser, RuleBasedQueryParser } from '@adapters/queryParser.adapter';
+import { createQueryParser, IQueryParser, RuleBasedQueryParser } from '@adapters/queryParser.adapter';
 import { TRestaurantSortKey } from '@interfaces/restaurantFilters.interface';
+import { HttpException } from '@exceptions/HttpException';
 import RestaurantService from '@services/restaurant.service';
 
 const loadEmptyVocabulary = async () => ({ cities: [], cuisines: [] });
@@ -9,8 +10,14 @@ const loadEmptyVocabulary = async () => ({ cities: [], cuisines: [] });
 const createRestaurantService = (restaurants: any[] = []) => {
   const restaurantService = new RestaurantService();
   const findRestaurants = jest.spyOn(restaurantService, 'findRestaurants').mockResolvedValue(restaurants);
+  jest.spyOn(restaurantService, 'getCitiesAndCuisines').mockImplementation(loadEmptyVocabulary);
   return { restaurantService, findRestaurants };
 };
+
+const createFakeQueryParser = (parsedFilters: unknown): IQueryParser => ({
+  name: 'fake-nlu',
+  parse: jest.fn(async () => parsedFilters as any),
+});
 
 afterEach(() => jest.restoreAllMocks());
 
@@ -25,6 +32,38 @@ describe('adapter factories', () => {
     expect(() => createQueryParser('dialogflow', loadEmptyVocabulary)).toThrow(/Supported: rules/);
     expect(() => createDistanceRanker('teleport')).toThrow(/Supported: straight-line/);
     expect(() => createGeocoder('google', async () => null)).toThrow(/Supported: locality/);
+  });
+});
+
+describe('query parser adapter', () => {
+  test('the service uses whichever parser it was given', async () => {
+    const { restaurantService, findRestaurants } = createRestaurantService();
+    restaurantService.queryParser = createFakeQueryParser({ city: 'Mumbai', sort: '-rating' });
+    const searchResult = await restaurantService.searchRestaurants({ q: 'anything', page: 1, limit: 20 });
+    expect(restaurantService.queryParser.parse).toHaveBeenCalledWith('anything');
+    expect(searchResult.interpreted).toEqual({ city: 'Mumbai', sort: '-rating' });
+    expect(findRestaurants).toHaveBeenCalledWith(expect.objectContaining({ city: 'Mumbai', sort: '-rating' }), 1);
+  });
+
+  test('strips unknown keys and never lets a provider set page or limit', async () => {
+    const { restaurantService, findRestaurants } = createRestaurantService();
+    restaurantService.queryParser = createFakeQueryParser({ city: 'Mumbai', page: 7, limit: 99999, junk: 1 });
+    const searchResult = await restaurantService.searchRestaurants({ q: 'x', page: 1, limit: 20 });
+    expect(searchResult.interpreted).toEqual({ city: 'Mumbai', sort: 'relevance' });
+    expect(findRestaurants).toHaveBeenCalledWith(expect.objectContaining({ page: 1, limit: 20 }), 1);
+  });
+
+  test('rejects invalid provider output as a 502', async () => {
+    const { restaurantService } = createRestaurantService();
+    restaurantService.queryParser = createFakeQueryParser({ sort: 'bogus' });
+    await expect(restaurantService.searchRestaurants({ q: 'x', page: 1, limit: 20 })).rejects.toThrow(HttpException);
+    await expect(restaurantService.searchRestaurants({ q: 'x', page: 1, limit: 20 })).rejects.toMatchObject({ status: 502, message: /fake-nlu/ });
+  });
+
+  test('half a location from the provider is a 502, not a 400', async () => {
+    const { restaurantService } = createRestaurantService();
+    restaurantService.queryParser = createFakeQueryParser({ lat: 28.4 });
+    await expect(restaurantService.searchRestaurants({ q: 'x', page: 1, limit: 20 })).rejects.toMatchObject({ status: 502 });
   });
 });
 
@@ -80,6 +119,18 @@ describe('geocoder adapter', () => {
     const geocoder = new LocalityGeocoder(findLocalityCentre);
     await expect(geocoder.geocode('  connaught place ')).resolves.toEqual(connaughtPlace);
     expect(findLocalityCentre).toHaveBeenCalledWith('connaught place');
+  });
+
+  test('a place in the search text becomes coordinates for the query', async () => {
+    const { restaurantService, findRestaurants } = createRestaurantService();
+    restaurantService.queryParser = createFakeQueryParser({ place: 'connaught place' });
+    restaurantService.geocoder = createFakeGeocoder(connaughtPlace);
+
+    const searchResult = await restaurantService.searchRestaurants({ q: 'near connaught place', page: 1, limit: 20 });
+
+    expect(restaurantService.geocoder.geocode).toHaveBeenCalledWith('connaught place');
+    expect(findRestaurants).toHaveBeenCalledWith(expect.objectContaining(connaughtPlace), 1);
+    expect(searchResult.interpreted).toMatchObject({ place: 'connaught place', ...connaughtPlace });
   });
 
   test('the list endpoint geocodes a place too', async () => {
