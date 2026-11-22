@@ -54,9 +54,9 @@ export const parseSearchQuery = (query: string, vocabulary: ISearchVocabulary): 
   };
 
   const radius = takeMatch(/\bwithin\s*(\d+(?:\.\d+)?)\s*(?:km|kms|kilomet(?:er|re)s?)\b/);
-  if (radius?.[1]) filters.maxDistanceKm = Number(radius[1]);
+  if (radius && Number(radius[1]) > 0) filters.maxDistanceKm = Number(radius[1]);
 
-  const price = takeMatch(/\b(?:under|below|less than|within|up ?to|max)\s*(?:rs\.?|₹|inr)?\s*([\d,]+)/);
+  const price = takeMatch(/\b(?:under|below|less than|within|up ?to|max)\s*(?:rs\.?|₹|inr)?\s*([\d,]+)(?:\s*(?:rs|inr|rupees|₹))?(?![a-z\d]|\.\d)/);
   if (price?.[1]) filters.maxCostForTwo = Number(price[1].replaceAll(',', ''));
 
   const nearest = takeMatch(/\b(?:nearest|closest|near me|nearby)\b/);

@@ -45,6 +45,23 @@ describe('parseSearchQuery', () => {
     expect(filters.maxCostForTwo).toBeUndefined();
   });
 
+  test('a zero radius is consumed but sets nothing, so it never becomes a ₹0 budget', () => {
+    expect(parseSearchQuery('chinese within 0 km', vocabulary)).toEqual({ cuisines: ['Chinese'] });
+  });
+
+  test.each(['under 1e9', 'under 2.5', 'below 12abc'])('%s is not read as a budget', query => {
+    expect(parseSearchQuery(query, vocabulary).maxCostForTwo).toBeUndefined();
+  });
+
+  test.each([
+    ['under 500rs', 500],
+    ['under 500 rupees', 500],
+    ['upto 800 inr for two', 800],
+    ['under 1000.', 1000],
+  ])('a rupee suffix or full stop after the amount still works: %s is %i', (query, maxCostForTwo) => {
+    expect(parseSearchQuery(query, vocabulary).maxCostForTwo).toBe(maxCostForTwo);
+  });
+
   test('a radius and a budget in one sentence are told apart', () => {
     expect(parseSearchQuery('chinese within 2 km under 500', vocabulary)).toEqual({ cuisines: ['Chinese'], maxDistanceKm: 2, maxCostForTwo: 500 });
   });

@@ -70,6 +70,13 @@ describe('GET /v1/restaurants/search: natural language', () => {
     expect(response.status).toBe(400);
     expect(response.body.message).toMatch(/q must not contain control characters/);
   });
+
+  test("'within 0 km' is ignored instead of failing as a 502", async () => {
+    const response = await searchRestaurants(`${searchText('south indian within 0 km')}&lat=${GURGAON.lat}&lng=${GURGAON.lng}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data.interpreted.maxDistanceKm).toBeUndefined();
+    expect(response.body.data.interpreted.maxCostForTwo).toBeUndefined();
+  });
 });
 
 describe('GET /v1/restaurants/search: does everything list does', () => {
