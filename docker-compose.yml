@@ -1,0 +1,41 @@
+services:
+  mongo:
+    image: mongo:8.2
+    ports: ['27018:27017']
+    volumes: [mongo-data:/data/db]
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  seed:
+    build: .
+    command: ['node', 'dist/scripts/seedRestaurants.js']
+    environment:
+      MONGODB_CONNECTION_URL: mongodb://mongo:27017/biteexpress
+      CSV_FILE_PATH: /app/data/zomato.csv
+      SAMPLE_CSV_FILE_PATH: /app/data/sample.csv
+    volumes: ['./data:/app/data:ro']
+    depends_on:
+      mongo: { condition: service_healthy }
+    restart: 'no'
+
+  api:
+    build: .
+    ports: ['8000:8000']
+    environment:
+      MONGODB_CONNECTION_URL: mongodb://mongo:27017/biteexpress
+      PORT: '8000'
+      DISTANCE_RANKER: straight-line
+      GEOCODER: locality
+    depends_on:
+      seed: { condition: service_completed_successfully }
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:8000/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mongo-data:

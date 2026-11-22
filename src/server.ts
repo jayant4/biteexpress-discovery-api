@@ -1,6 +1,8 @@
 import App from '@/app';
 import { connectToDatabase, disconnectFromDatabase } from '@databases';
 import IndexRoute from '@routes/index.route';
+import RestaurantRoute from '@routes/restaurant.route';
+import RestaurantService from '@services/restaurant.service';
 import { logger } from '@utils/logger';
 import validateEnv from '@utils/validateEnv';
 
@@ -9,8 +11,9 @@ validateEnv();
 const startServer = async () => {
   await connectToDatabase();
   logger.info('Connected to database');
+  await new RestaurantService().ensureRestaurantIndexes();
 
-  const app = new App([new IndexRoute()]);
+  const app = new App([new IndexRoute(), new RestaurantRoute()]);
   const server = app.listen();
 
   const shutdown = (signal: string) => {

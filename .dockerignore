@@ -1,0 +1,7 @@
+node_modules
+dist
+data
+src/tests
+.git
+.claude
+*.md

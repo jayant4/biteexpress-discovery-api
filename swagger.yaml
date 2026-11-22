@@ -3,6 +3,7 @@ info:
   title: BiteExpress Restaurant Discovery API
   version: 1.0.0
 tags:
+  - name: restaurants
   - name: health
 paths:
   /healthz:
@@ -20,9 +21,198 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Message' }
+  /v1/restaurants:
+    post:
+      tags: [restaurants]
+      summary: Create a restaurant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRestaurant' }
+      responses:
+        '201':
+          description: Restaurant created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/RestaurantDetails' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    get:
+      tags: [restaurants]
+      summary: List restaurants with filters, sorting and distance
+      parameters:
+        - $ref: '#/components/parameters/name'
+        - $ref: '#/components/parameters/city'
+        - $ref: '#/components/parameters/country'
+        - $ref: '#/components/parameters/country'
+        - $ref: '#/components/parameters/cuisines'
+        - $ref: '#/components/parameters/minRating'
+        - $ref: '#/components/parameters/maxCostForTwo'
+        - $ref: '#/components/parameters/lat'
+        - $ref: '#/components/parameters/lng'
+        - $ref: '#/components/parameters/maxDistanceKm'
+        - $ref: '#/components/parameters/place'
+        - in: query
+          name: sort
+          schema: { $ref: '#/components/schemas/SortKey', default: relevance }
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: One page of restaurants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/RestaurantPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /v1/restaurants/{id}:
+    get:
+      tags: [restaurants]
+      summary: Get one restaurant
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, example: 64b7f0c2a1b2c3d4e5f60718 }
+      responses:
+        '200':
+          description: Restaurant details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data: { $ref: '#/components/schemas/RestaurantDetails' }
+        '404':
+          description: Restaurant not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
 components:
+  parameters:
+    name: { in: query, name: name, schema: { type: string } }
+    city: { in: query, name: city, schema: { type: string, example: Gurgaon } }
+    country:
+      {
+        in: query,
+        name: country,
+        description: Market to search in. Send the user's country so a budget search does not return restaurants abroad.,
+        schema: { type: string, example: India },
+      }
+    cuisines: { in: query, name: cuisines, description: Comma-separated list, schema: { type: string, example: 'Chinese,North Indian' } }
+    minRating: { in: query, name: minRating, schema: { type: number, minimum: 0, maximum: 5 } }
+    maxCostForTwo:
+      {
+        in: query,
+        name: maxCostForTwo,
+        description: "Budget for two in INR, compared against each restaurant's price converted to INR",
+        schema: { type: number, minimum: 0 },
+      }
+    lat: { in: query, name: lat, schema: { type: number, minimum: -90, maximum: 90, example: 28.4595 } }
+    lng: { in: query, name: lng, schema: { type: number, minimum: -180, maximum: 180, example: 77.0266 } }
+    maxDistanceKm: { in: query, name: maxDistanceKm, schema: { type: number, exclusiveMinimum: true, minimum: 0 } }
+    place:
+      {
+        in: query,
+        name: place,
+        description: 'Locality to search around, e.g. Connaught Place. Ignored when lat/lng are given; 404 when unknown. Searches within 5 km unless maxDistanceKm is given.',
+        schema: { type: string, maxLength: 100 },
+      }
+    page: { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+    limit: { in: query, name: limit, description: Values above 50 are capped to 50, schema: { type: integer, minimum: 1, default: 20 } }
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
   schemas:
     Message:
       type: object
       properties:
         message: { type: string }
+    SortKey:
+      type: string
+      enum: [relevance, distance, rating, -rating, name, -name, cost, -cost]
+    CreateRestaurant:
+      type: object
+      required: [name, address, city, country]
+      properties:
+        name: { type: string, example: Idli House }
+        address: { type: string, example: Sector 14 }
+        city: { type: string, example: Gurgaon }
+        country: { type: string, example: India }
+        cuisines: { type: array, items: { type: string }, example: [South Indian] }
+        lat: { type: number, example: 28.47 }
+        lng: { type: number, example: 77.03 }
+        costForTwo: { type: integer, example: 300 }
+        currency:
+          {
+            type: string,
+            enum: [INR, AED, AUD, BRL, CAD, GBP, IDR, LKR, NZD, PHP, QAR, SGD, TRY, USD, ZAR],
+            default: INR,
+            description: Currency of costForTwo,
+          }
+        avgRating: { type: number, minimum: 0, maximum: 5, example: 4 }
+    RestaurantSummary:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        address: { type: string }
+        city: { type: string }
+        country: { type: string }
+        cuisines: { type: array, items: { type: string } }
+        avgRating: { type: number, nullable: true }
+        distanceKm: { type: number, description: Present only when lat and lng are given }
+    RestaurantPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RestaurantSummary' } }
+        page: { type: integer }
+        limit: { type: integer }
+        hasMore: { type: boolean }
+    RestaurantDetails:
+      type: object
+      properties:
+        id: { type: string }
+        externalId: { type: integer }
+        source: { type: string, enum: [zomato, api] }
+        name: { type: string }
+        address: { type: string }
+        locality: { type: string }
+        localityVerbose: { type: string }
+        city: { type: string }
+        country: { type: string }
+        countryCode: { type: integer }
+        cuisines: { type: array, items: { type: string } }
+        avgRating: { type: number, nullable: true }
+        lat: { type: number }
+        lng: { type: number }
+        costForTwo: { type: number, description: In the restaurant's own currency }
+        costForTwoInr: { type: number, description: costForTwo converted to INR; used by maxCostForTwo and sort=cost }
+        currency: { type: string, enum: [INR, AED, AUD, BRL, CAD, GBP, IDR, LKR, NZD, PHP, QAR, SGD, TRY, USD, ZAR] }
+        priceRange: { type: integer }
+        flags:
+          type: object
+          properties:
+            hasTableBooking: { type: boolean }
+            hasOnlineDelivery: { type: boolean }
+            isDeliveringNow: { type: boolean }
+        rating:
+          type: object
+          properties:
+            aggregate: { type: number, nullable: true }
+            text: { type: string }
+            color: { type: string }
+            votes: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
