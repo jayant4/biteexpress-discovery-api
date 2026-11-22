@@ -1,7 +1,10 @@
 import { createDistanceRanker, IDistanceRanker, StraightLineDistanceRanker } from '@adapters/distanceRanker.adapter';
 import { createGeocoder, IGeocoder, LocalityGeocoder } from '@adapters/geocoder.adapter';
+import { createQueryParser, RuleBasedQueryParser } from '@adapters/queryParser.adapter';
 import { TRestaurantSortKey } from '@interfaces/restaurantFilters.interface';
 import RestaurantService from '@services/restaurant.service';
+
+const loadEmptyVocabulary = async () => ({ cities: [], cuisines: [] });
 
 const createRestaurantService = (restaurants: any[] = []) => {
   const restaurantService = new RestaurantService();
@@ -13,11 +16,13 @@ afterEach(() => jest.restoreAllMocks());
 
 describe('adapter factories', () => {
   test('build the default adapters from their config names', () => {
+    expect(createQueryParser('rules', loadEmptyVocabulary)).toBeInstanceOf(RuleBasedQueryParser);
     expect(createDistanceRanker('straight-line')).toBeInstanceOf(StraightLineDistanceRanker);
     expect(createGeocoder('locality', async () => null)).toBeInstanceOf(LocalityGeocoder);
   });
 
   test('fail fast on an unknown provider, listing the supported ones', () => {
+    expect(() => createQueryParser('dialogflow', loadEmptyVocabulary)).toThrow(/Supported: rules/);
     expect(() => createDistanceRanker('teleport')).toThrow(/Supported: straight-line/);
     expect(() => createGeocoder('google', async () => null)).toThrow(/Supported: locality/);
   });

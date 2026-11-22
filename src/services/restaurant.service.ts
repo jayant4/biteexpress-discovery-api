@@ -1,9 +1,10 @@
 import { createDistanceRanker, IDistanceRanker } from '@adapters/distanceRanker.adapter';
 import { createGeocoder, IGeocoder } from '@adapters/geocoder.adapter';
-import { DISTANCE_RANKER, GEOCODER, MONGO_QUERY_TIMEOUT_MS } from '@config';
+import { createQueryParser, IQueryParser } from '@adapters/queryParser.adapter';
+import { DISTANCE_RANKER, GEOCODER, MONGO_QUERY_TIMEOUT_MS, NL_PARSER } from '@config';
 import { CreateRestaurantDto } from '@dtos/restaurant.dto';
 import { HttpException } from '@exceptions/HttpException';
-import { ERestaurantSource, ILatLng, INewRestaurant, IRestaurant } from '@interfaces/restaurant.interface';
+import { ERestaurantSource, ICitiesAndCuisines, ILatLng, INewRestaurant, IRestaurant } from '@interfaces/restaurant.interface';
 import {
   DEFAULT_PLACE_RADIUS_KM,
   IPaginatedRestaurants,
@@ -21,6 +22,7 @@ const isNearestFirst = (filters: IRestaurantFilters) => filters.lat !== undefine
 
 class RestaurantService {
   public restaurants = restaurantModel;
+  public queryParser: IQueryParser = createQueryParser(NL_PARSER, () => this.getCitiesAndCuisines());
   public distanceRanker: IDistanceRanker = createDistanceRanker(DISTANCE_RANKER);
   public geocoder: IGeocoder = createGeocoder(GEOCODER, locality => this.findLocalityCentre(locality));
 
@@ -73,6 +75,11 @@ class RestaurantService {
 
   public async findRestaurants(filters: IRestaurantFilters, extra = 0): Promise<IRestaurantSummary[]> {
     return this.restaurants.aggregate(buildRestaurantPipeline(filters, { extra })).option({ maxTimeMS: MONGO_QUERY_TIMEOUT_MS });
+  }
+
+  public async getCitiesAndCuisines(): Promise<ICitiesAndCuisines> {
+    const [cities, cuisines] = await Promise.all([this.restaurants.distinct('city'), this.restaurants.distinct('cuisines')]);
+    return { cities: cities as string[], cuisines: cuisines as string[] };
   }
 
   public async findLocalityCentre(locality: string): Promise<ILatLng | null> {

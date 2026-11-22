@@ -27,6 +27,7 @@ services:
     environment:
       MONGODB_CONNECTION_URL: mongodb://mongo:27017/biteexpress
       PORT: '8000'
+      NL_PARSER: rules
       DISTANCE_RANKER: straight-line
       GEOCODER: locality
     depends_on:

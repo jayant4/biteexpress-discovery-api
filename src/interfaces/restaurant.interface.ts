@@ -53,3 +53,8 @@ export interface ILatLng {
   lat: number;
   lng: number;
 }
+
+export interface ICitiesAndCuisines {
+  cities: string[];
+  cuisines: string[];
+}

@@ -7,6 +7,7 @@ export const {
   MONGODB_CONNECTION_URL = 'mongodb://localhost:27018/biteexpress',
   LOG_FORMAT = 'dev',
   ORIGIN = '*',
+  NL_PARSER = 'rules',
   DISTANCE_RANKER = 'straight-line',
   GEOCODER = 'locality',
   CSV_FILE_PATH = 'data/zomato.csv',
