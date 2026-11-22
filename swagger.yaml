@@ -72,6 +72,54 @@ paths:
                   message: { type: string }
                   data: { $ref: '#/components/schemas/RestaurantPage' }
         '400': { $ref: '#/components/responses/BadRequest' }
+  /v1/restaurants/search:
+    get:
+      tags: [restaurants]
+      summary: Search restaurants with a plain English query
+      description: Accepts every list parameter plus q. Explicit parameters override what is read from q.
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 200 }
+          examples:
+            best: { value: Best restaurants in Gurgaon with South Indian Food }
+            budget: { value: Restaurants in Gurgaon under Rs. 1000 for two }
+            nearest: { value: Nearest place that serves Vada Pav }
+        - $ref: '#/components/parameters/name'
+        - $ref: '#/components/parameters/city'
+        - $ref: '#/components/parameters/cuisines'
+        - $ref: '#/components/parameters/minRating'
+        - $ref: '#/components/parameters/maxCostForTwo'
+        - $ref: '#/components/parameters/lat'
+        - $ref: '#/components/parameters/lng'
+        - $ref: '#/components/parameters/maxDistanceKm'
+        - $ref: '#/components/parameters/place'
+        - in: query
+          name: sort
+          schema: { $ref: '#/components/schemas/SortKey' }
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: One page of restaurants and the filters read from q
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/RestaurantPage'
+                      - type: object
+                        properties:
+                          interpreted: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '502':
+          description: The query parser returned invalid filters
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
   /v1/restaurants/{id}:
     get:
       tags: [restaurants]
