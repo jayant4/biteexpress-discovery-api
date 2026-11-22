@@ -1,0 +1,28 @@
+openapi: 3.0.3
+info:
+  title: BiteExpress Restaurant Discovery API
+  version: 1.0.0
+tags:
+  - name: health
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Checks that the API can reach MongoDB
+      responses:
+        '200':
+          description: Database reachable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '503':
+          description: Database unreachable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+components:
+  schemas:
+    Message:
+      type: object
+      properties:
+        message: { type: string }

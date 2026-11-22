@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+logs/
+data/*.csv
+!data/sample.csv
+data/*.xlsx
+.env
+.env.*.local
+.claude/
+.DS_Store
