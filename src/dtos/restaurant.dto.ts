@@ -1,10 +1,28 @@
 import 'reflect-metadata';
-import { supportedRestaurantSortKeys, TRestaurantSortKey } from '@interfaces/restaurantFilters.interface';
+import { MAX_RESTAURANTS_PAGE, supportedRestaurantSortKeys, TRestaurantSortKey } from '@interfaces/restaurantFilters.interface';
 import { supportedCurrencies } from '@utils/currency';
 import { Transform, TransformFnParams, Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  ValidationOptions,
+} from 'class-validator';
 
 const trimText = ({ value }: TransformFnParams) => (typeof value === 'string' ? value.trim() : value);
+
+const NoControlCharacters = (options?: ValidationOptions) =>
+  Matches(/^\P{Cc}*$/u, { message: '$property must not contain control characters', ...options });
 
 const splitByComma = ({ value }: TransformFnParams) =>
   typeof value === 'string'
@@ -73,18 +91,21 @@ class RestaurantFiltersDto {
   @Transform(trimText)
   @IsString()
   @IsNotEmpty()
+  @NoControlCharacters()
   public name?: string;
 
   @IsOptional()
   @Transform(trimText)
   @IsString()
   @IsNotEmpty()
+  @NoControlCharacters()
   public city?: string;
 
   @IsOptional()
   @Transform(trimText)
   @IsString()
   @IsNotEmpty()
+  @NoControlCharacters()
   public country?: string;
 
   @IsOptional()
@@ -92,6 +113,7 @@ class RestaurantFiltersDto {
   @IsArray()
   @ArrayNotEmpty()
   @IsString({ each: true })
+  @NoControlCharacters({ each: true })
   public cuisines?: string[];
 
   @IsOptional()
@@ -131,12 +153,14 @@ class RestaurantFiltersDto {
   @Transform(trimText)
   @IsString()
   @IsNotEmpty()
+  @NoControlCharacters()
   @MaxLength(100)
   public place?: string;
 
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(MAX_RESTAURANTS_PAGE)
   public page: number = 1;
 
   @Type(() => Number)
@@ -155,6 +179,7 @@ export class SearchRestaurantsDto extends RestaurantFiltersDto {
   @Transform(trimText)
   @IsString()
   @MaxLength(200)
+  @NoControlCharacters()
   public q?: string;
 
   @IsOptional()

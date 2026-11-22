@@ -64,6 +64,12 @@ describe('GET /v1/restaurants/search: natural language', () => {
   test('q is length-limited', async () => {
     expect((await searchRestaurants(searchText('x'.repeat(201)))).status).toBe(400);
   });
+
+  test('a null byte in q is a 400, not a 500', async () => {
+    const response = await searchRestaurants('q=%00');
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/q must not contain control characters/);
+  });
 });
 
 describe('GET /v1/restaurants/search: does everything list does', () => {

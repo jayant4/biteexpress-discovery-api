@@ -1,5 +1,7 @@
 export const MAX_RESTAURANTS_PAGE_SIZE = 50;
 
+export const MAX_RESTAURANTS_PAGE = 1000;
+
 export const DEFAULT_PLACE_RADIUS_KM = 5;
 
 export type TRestaurantSortKey = 'relevance' | 'distance' | 'rating' | '-rating' | 'name' | '-name' | 'cost' | '-cost';

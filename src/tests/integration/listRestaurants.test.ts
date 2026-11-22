@@ -106,6 +106,22 @@ describe('GET /v1/restaurants: bad input', () => {
   test.each(['page=0', 'page=-1', 'limit=0', 'minRating=9', 'sort=bogus', 'lat=abc&lng=1'])('%s returns 400', async queryString => {
     expect((await listRestaurants(queryString)).status).toBe(400);
   });
+
+  test.each(['name=%00', 'city=a%00b', 'country=%01', 'cuisines=Chinese,%00', 'place=%00x'])(
+    'control characters in text (%s) are a 400, not a 500',
+    async queryString => {
+      const response = await listRestaurants(queryString);
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/control characters/);
+    },
+  );
+
+  test('a page too large to skip to is a 400, not a 500', async () => {
+    const response = await listRestaurants('page=99999999999999999999');
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/page must not be greater than 1000/);
+    expect((await listRestaurants('page=1000')).status).toBe(200);
+  });
 });
 
 describe('GET /v1/restaurants: response and paging', () => {
