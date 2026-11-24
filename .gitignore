@@ -4,6 +4,7 @@ coverage/
 logs/
 data/*.csv
 !data/sample.csv
+!data/zomato.csv
 data/*.xlsx
 .env
 .env.*.local

@@ -18,7 +18,7 @@ docker compose up --build
 
 This starts MongoDB, loads the data, then starts the API on **http://localhost:8000**. Open http://localhost:8000/api-docs.
 
-**Data:** a fresh clone loads a committed **10-row synthetic sample** (`data/sample.csv`), and the seed logs a warning saying so. For the full dataset, download the [Kaggle Zomato Restaurants dataset](https://www.kaggle.com/datasets/shrutimehta/zomato-restaurants-data) and place `zomato.csv` in `data/` before `docker compose up`. Re-running the seed is idempotent: it upserts by Zomato ID.
+**Data:** the full [Kaggle Zomato Restaurants dataset](https://www.kaggle.com/datasets/shrutimehta/zomato-restaurants-data) (CC0, public domain) is committed as `data/zomato.csv`, so `docker compose up` loads all 9,551 restaurants. If that file is missing, the seed falls back to a 10-row synthetic sample (`data/sample.csv`) and logs a warning. Re-running the seed is idempotent: it upserts by Zomato ID.
 
 MongoDB is published on **localhost:27018**, not 27017, so it doesn't clash with a local MongoDB (for example in Compass: `mongodb://localhost:27018`).
 
@@ -137,6 +137,34 @@ One `restaurants` collection. Everything discovery reads together is embedded in
 - **Cuisines are a small, bounded array** (1 to 8 per restaurant), so they are embedded, and the multikey index `cuisines_rating_id` serves "best South Indian" directly. The cost is that renaming a cuisine means updating many documents, which is rare.
 - **What I would reference instead,** as the product grows: reviews and orders (they grow without limit, and a document is capped at 16 MB), full menus (change often and are read on their own), and lookup data such as countries, cuisine synonyms and localities. Those belong in their own collections, with the few values needed for reads copied into the restaurant (the extended-reference pattern).
 
+### Data cleaning
+
+The raw Zomato CSV needs some cleanup. It happens in one place, `src/utils/csvRowToRestaurant.ts`, which the seed runs on every row before writing. The mapping has unit tests in `csvRowToRestaurant.test.ts`.
+
+| Problem in the CSV | What the seed does |
+|---|---|
+| The file is not valid UTF-8 | Read as `latin1` |
+| Rows without a restaurant ID or name | Skipped, and counted in the seed log |
+| Stray spaces in text fields | Every text field is trimmed |
+| Coordinates of 0/0, missing, or out of range (497 rows) | No `location` is stored, so these restaurants drop out of distance results instead of appearing at a fake point in the Atlantic |
+| Unrated restaurants have rating 0 with the text "Not rated" (2,148 rows) | Stored as `null`, so they don't lower averages or pass a `minRating` filter |
+| The currency column is wrong or ambiguous: "Dollar($)" covers four currencies, the Philippines is labelled "Botswana Pula(P)", and the pound sign is garbled | The ISO currency (`INR`, `USD`, ...) is taken from the country code instead |
+| Prices are in 15 different currencies | A rupee price, `costForTwoInr`, is computed at write time and used by the price filter and cost sort |
+| The country is only a numeric code | Mapped to a country name |
+| Cuisines are one comma-separated string | Split into an array, trimmed, with empty values removed |
+| Yes/No columns for table booking and delivery | Converted to booleans |
+| Running the seed twice | Upserts by Zomato ID, so no duplicates |
+
+With the full dataset: 9,551 rows read, 0 skipped.
+
+**Not cleaned yet:**
+- **City spellings.** "Gurgaon" and "Gurugram" are matched only at search time, through a small alias list.
+- **Cuisine names.** They have no synonym list.
+- **The country name "Phillipines".** It keeps the dataset's spelling.
+- **Plausible but wrong coordinates.** Coordinates that are valid but far from the restaurant's city are not detected.
+
+In production, I would add a `$jsonSchema` validator on the collection so that every writer, not just the seed, is checked. I would also move city and cuisine names into lookup collections with aliases.
+
 ### More detail
 
 See **[docs/DESIGN.md](docs/DESIGN.md)** for the indexes, the shared list/search query path, the natural-language approach, trade-offs, what was deliberately left out, and the path to production.
@@ -146,6 +174,23 @@ Bugs found and fixed, each with root cause, failing tests written first, and the
 - **[docs/BUG-place-search-radius.md](docs/BUG-place-search-radius.md):** "best ... near <place>" returned restaurants hundreds of kilometres away.
 - **[docs/BUG-price-filter-currency.md](docs/BUG-price-filter-currency.md):** the price filter and cost sort compared amounts in different currencies; fixed by storing a rupee price at write time.
 - **Monkey test** (random and hostile `/search` inputs): a null byte or a huge `page` caused 500s, "within 0 km" caused a 502, and "under 1e9" became a ₹1 budget. Fixed in the last two commits.
+
+## Business goals and how this design serves them
+
+BiteExpress earns when a user finds a restaurant and orders quickly, most of all at dinner peak. Discovery is the first piece to move off the monolith because it is read-heavy, tolerates slightly stale data, and its failure costs revenue directly.
+
+| Goal | Built in this MVP | Next |
+|---|---|---|
+| **Peak reliability and performance** (6–12 months) | One indexed read per query, with no joins; compound indexes matching each sort (checked with `explain`); 50-result cap, page cap and `maxTimeMS`; stateless API that scales by adding containers; `/healthz` that pings the database | Load test at 3x peak with p95 targets; Redis for hot queries; reads from secondaries; rate limiting; serve cached results when the database is slow |
+| **Relevant results** (conversion) | Natural-language search; radius limit for place searches; prices compared in INR across currencies; `country` filter to scope a market | Search-event log (time series) to track zero-result queries; typo tolerance with Atlas Search; widen the search when nothing matches |
+| **Cloud-native** (2–3 years) | Docker image and Compose; config from environment variables; MongoDB-first data access | MongoDB Atlas; containers on Kubernetes or ECS with autoscaling; blue-green deploys |
+| **International expansion** | ISO currency per restaurant; case-insensitive collation; the parser, geocoder and distance ranker are swappable strategies | Per-market base currency and live exchange rates; per-market city aliases and vocabulary; multi-language names |
+| **Global data regulations** | `country` on every document, ready to lead a shard key | Zone sharding by country so each country's data stays in its region; field-level encryption for personal data; retention limits on logs |
+| **Reusable for similar businesses** | Nothing food-specific outside the data and parser vocabulary; behaviour is chosen by configuration (`NL_PARSER`, `GEOCODER`, `DISTANCE_RANKER`) | Multi-tenancy (below) |
+
+**Multi-tenancy.** For several businesses on one platform: small tenants share the collection, with a `tenantId` as the first key of every index and of the shard key, so a query can never cross tenants. Large or regulated tenants get their own database, which isolates load and makes per-tenant data residency and deletion simple. Tenant settings such as currency, aliases, vocabulary and ranking weights live in a `tenants` collection. Not built, because it changes every index and query and is better designed with a real second tenant.
+
+**Coexisting with the monolith.** The relational system stays the source of truth at first. Change data capture streams its changes into MongoDB, and an API gateway routes discovery traffic to this service gradually (strangler fig). Writes move over only after the read path has proved itself. See [docs/DESIGN.md](docs/DESIGN.md) for the path to production.
 
 ## AI and tools disclosure
 
